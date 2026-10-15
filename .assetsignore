@@ -3,8 +3,8 @@
 .gitignore
 .nojekyll
 .assetsignore
-_headers
 wrangler.jsonc
 scripts/
 src/
 node_modules/
+.wrangler/
