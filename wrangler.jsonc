@@ -1,0 +1,9 @@
+// Cloudflare Workers static-assets config. No build step: the encrypted pages
+// are committed, so the repo root is served as-is (minus .assetsignore).
+{
+  "name": "lumio-prototypes",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "."
+  }
+}
