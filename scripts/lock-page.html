@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Sign in · {{NAME}} prototype</title>
+<style>
+  :root {
+    --fg: #1f2328;
+    --fg-muted: #59636e;
+    --bg: #ffffff;
+    --bg-subtle: #f6f8fa;
+    --border: #d1d9e0;
+    --accent: #0969da;
+    --success: #1f883d;
+    --danger: #d1242f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  form {
+    max-width: 340px;
+    margin: 0 auto;
+    padding: 64px 16px 32px;
+    text-align: center;
+  }
+  svg { fill: var(--fg-muted); }
+  h1 {
+    margin: 16px 0;
+    font-size: 24px;
+    font-weight: 300;
+    letter-spacing: -0.5px;
+  }
+  .box {
+    padding: 16px;
+    text-align: left;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  label { display: block; margin-bottom: 8px; }
+  input {
+    width: 100%;
+    margin-bottom: 16px;
+    padding: 5px 12px;
+    font: inherit;
+    line-height: 20px;
+    color: var(--fg);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .error { margin: -8px 0 16px; font-size: 12px; color: var(--danger); }
+  button {
+    width: 100%;
+    padding: 5px 16px;
+    font: inherit;
+    font-weight: 500;
+    line-height: 20px;
+    color: #fff;
+    background: var(--success);
+    border: 1px solid #1f232826;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  button:hover { background: #1c8139; }
+  button:disabled { opacity: 0.7; cursor: progress; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<form id="signin" autocomplete="off" hidden>
+  <svg width="32" height="32" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V7.25C6 3.845 8.503 1 12 1s6 2.845 6 6.25V9h.5a2.5 2.5 0 0 1 2.5 2.5v8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 19.5v-8A2.5 2.5 0 0 1 5.5 9Zm-1.5 2.5v8a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-13a1 1 0 0 0-1 1Zm3-4.25V9h9V7.25c0-2.67-1.922-4.75-4.5-4.75-2.578 0-4.5 2.08-4.5 4.75Z"/></svg>
+  <h1>Sign in to view {{NAME}} prototype</h1>
+  <div class="box">
+    <label for="password">Password</label>
+    <input id="password" type="password" required>
+    <p class="error" id="error" role="alert" hidden>Incorrect password. Check it and try again.</p>
+    <button type="submit" id="submit">Sign in</button>
+  </div>
+</form>
+
+<script type="application/json" id="payload">{{PAYLOAD}}</script>
+
+<script>
+(() => {
+  const payload = JSON.parse(document.getElementById('payload').textContent);
+  const STORAGE_KEY = 'lumio-key:' + payload.project;
+  const form = document.getElementById('signin');
+  const input = document.getElementById('password');
+  const submit = document.getElementById('submit');
+  const error = document.getElementById('error');
+
+  const fromB64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  const toB64 = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes)));
+
+  async function deriveKey(password) {
+    const baseKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt: fromB64(payload.salt), iterations: payload.iterations, hash: 'SHA-256' },
+      baseKey,
+      { name: 'AES-GCM', length: 256 },
+      true,
+      ['decrypt']
+    );
+  }
+
+  async function decrypt(key) {
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(payload.iv) }, key, fromB64(payload.data));
+    return new TextDecoder().decode(plain);
+  }
+
+  function render(html) {
+    document.open();
+    document.write(html);
+    document.close();
+  }
+
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    error.hidden = true;
+    submit.disabled = true;
+    submit.textContent = 'Signing in…';
+    try {
+      const key = await deriveKey(input.value);
+      const html = await decrypt(key);
+      try { sessionStorage.setItem(STORAGE_KEY, toB64(await crypto.subtle.exportKey('raw', key))); } catch {}
+      render(html);
+    } catch {
+      error.hidden = false;
+      submit.disabled = false;
+      submit.textContent = 'Sign in';
+      input.select();
+    }
+  });
+
+  // One sign-in unlocks every page of this project for the browser tab
+  (async () => {
+    let saved = null;
+    try { saved = sessionStorage.getItem(STORAGE_KEY); } catch {}
+    if (saved) {
+      try {
+        const key = await crypto.subtle.importKey('raw', fromB64(saved), 'AES-GCM', false, ['decrypt']);
+        return render(await decrypt(key));
+      } catch {
+        try { sessionStorage.removeItem(STORAGE_KEY); } catch {}
+      }
+    }
+    form.hidden = false;
+    input.focus();
+  })();
+})();
+</script>
+</body>
+</html>
