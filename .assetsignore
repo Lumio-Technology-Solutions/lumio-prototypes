@@ -1,0 +1,10 @@
+.git
+.DS_Store
+.gitignore
+.nojekyll
+.assetsignore
+wrangler.jsonc
+scripts/
+src/
+node_modules/
+.wrangler/
