@@ -202,128 +202,16 @@
   // warm the cache so switching feels instant
   tabs.slice(1).forEach((t) => { const im = new Image(); im.src = t.dataset.img; });
 
-  /* ---------- Team builder ---------- */
-  // Fully loaded monthly cost of an intermediate local hire in the US (salary, benefits, tax, overhead)
-  const ROLES = {
-    accountant:  { name: "Accountant",            us: 7800,  ratio: 0.33 },
-    bookkeeper:  { name: "Bookkeeper",            us: 5600,  ratio: 0.32 },
-    csr:         { name: "Customer service rep",  us: 4900,  ratio: 0.34 },
-    va:          { name: "Virtual assistant",     us: 4700,  ratio: 0.33 },
-    ea:          { name: "Executive assistant",   us: 6000,  ratio: 0.34 },
-    sdr:         { name: "Sales development rep", us: 6200,  ratio: 0.35 },
-    designer:    { name: "Graphic designer",      us: 6300,  ratio: 0.33 },
-    marketer:    { name: "Digital marketer",      us: 6800,  ratio: 0.34 },
-    copywriter:  { name: "Copywriter",            us: 5800,  ratio: 0.32 },
-    developer:   { name: "Software developer",    us: 11500, ratio: 0.38 },
-    mobile:      { name: "Mobile developer",      us: 11800, ratio: 0.38 },
-    qa:          { name: "QA engineer",           us: 8400,  ratio: 0.36 },
-  };
-  const LEVELS = { junior: { name: "Junior", k: 0.8 }, mid: { name: "Intermediate", k: 1 }, senior: { name: "Senior", k: 1.3 } };
-  // local cost relative to the US figure, in local currency
-  const COUNTRIES = {
-    US: { cur: "US$", fx: 1, local: 1 },
-    AU: { cur: "A$", fx: 1.52, local: 0.92 },
-    UK: { cur: "£", fx: 0.77, local: 0.85 },
-  };
-  const DEFAULT_TEAM = [
-    { role: "accountant", qty: 1, level: "mid" },
-    { role: "va", qty: 3, level: "junior" },
-    { role: "designer", qty: 2, level: "mid" },
-    { role: "developer", qty: 2, level: "senior" },
-  ];
-
-  const tbRows = document.getElementById("tb-rows");
-  const tbAdd = document.getElementById("tb-add");
-  const tbCountry = document.getElementById("tb-country");
-  const tbEmpty = document.getElementById("tb-empty");
-  const num = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
-  let teamState = DEFAULT_TEAM.map((r) => ({ ...r }));
-
-  Object.entries(ROLES).forEach(([key, r]) => tbAdd.add(new Option(r.name, key)));
-
-  const cost = (row) => {
-    const c = COUNTRIES[tbCountry.value];
-    const r = ROLES[row.role];
-    // GSS rate is set in USD and converted; local cost scales by market
-    const local = r.us * LEVELS[row.level].k * c.local * c.fx * row.qty;
-    const gss = r.us * r.ratio * LEVELS[row.level].k * c.fx * row.qty;
-    return { local, gss, save: local - gss };
-  };
-
-  const money = (v, cls = "") => `<span class="tb__money ${cls}"><small>${COUNTRIES[tbCountry.value].cur}</small>${num.format(v)}</span>`;
-
-  const renderTeam = (newIndex = -1) => {
-    tbRows.innerHTML = teamState.map((row, i) => {
-      const c = cost(row);
-      const r = ROLES[row.role];
-      const levelOpts = Object.entries(LEVELS)
-        .map(([k, l]) => `<option value="${k}"${k === row.level ? " selected" : ""}>${l.name}</option>`).join("");
-      return `<div class="tb__row${i === newIndex ? " is-new" : ""}" role="row" data-i="${i}">
-        <span class="tb__role" role="cell">${r.name}</span>
-        <span role="cell" class="stepper">
-          <button type="button" data-act="dec" aria-label="Fewer ${r.name}s"${row.qty <= 1 ? " disabled" : ""}>&minus;</button>
-          <output aria-live="polite">${row.qty}</output>
-          <button type="button" data-act="inc" aria-label="More ${r.name}s"${row.qty >= 50 ? " disabled" : ""}>+</button>
-        </span>
-        <span role="cell" class="tb__exp"><select data-act="level" aria-label="${r.name} experience">${levelOpts}</select></span>
-        <span role="cell">${money(c.local)}</span>
-        <span role="cell">${money(c.gss, "tb__money--gss")}</span>
-        <span role="cell">${money(c.save, "tb__money--save")}</span>
-        <span role="cell"><button type="button" class="tb__remove" data-act="remove" aria-label="Remove ${r.name}">
-          <svg viewBox="0 0 10 10"><path d="m1 1 8 8M9 1 1 9"/></svg></button></span>
-      </div>`;
-    }).join("");
-
-    const totals = teamState.reduce((t, row) => {
-      const c = cost(row);
-      t.local += c.local; t.gss += c.gss; t.save += c.save;
-      return t;
-    }, { local: 0, gss: 0, save: 0 });
-    const cur = COUNTRIES[tbCountry.value].cur;
-    tbEmpty.hidden = teamState.length > 0;
-    document.getElementById("tb-local").textContent = `${cur} ${num.format(totals.local)}`;
-    document.getElementById("tb-save").textContent = `${cur} ${num.format(totals.save)}`;
-    document.getElementById("tb-cur").textContent = cur;
-    document.getElementById("tb-gss").textContent = num.format(totals.gss);
-  };
-
-  tbRows.addEventListener("click", (e) => {
-    const btn = e.target.closest("button[data-act]");
-    if (!btn) return;
-    const i = +btn.closest(".tb__row").dataset.i;
-    const act = btn.dataset.act;
-    if (act === "inc") teamState[i].qty = Math.min(50, teamState[i].qty + 1);
-    if (act === "dec") teamState[i].qty = Math.max(1, teamState[i].qty - 1);
-    if (act === "remove") teamState.splice(i, 1);
-    renderTeam();
-    // keep keyboard focus on the same control after re-render
-    const row = tbRows.querySelector(`[data-i="${act === "remove" ? Math.min(i, teamState.length - 1) : i}"]`);
-    const again = row && row.querySelector(act === "remove" ? '[data-act="remove"]' : `[data-act="${act}"]:not(:disabled)`);
-    (again || tbAdd).focus();
-  });
-  tbRows.addEventListener("change", (e) => {
-    if (e.target.dataset.act !== "level") return;
-    const i = +e.target.closest(".tb__row").dataset.i;
-    teamState[i].level = e.target.value;
-    renderTeam();
-    tbRows.querySelector(`[data-i="${i}"] select`).focus();
-  });
-  tbAdd.addEventListener("change", () => {
-    if (!tbAdd.value) return;
-    const existing = teamState.findIndex((r) => r.role === tbAdd.value && r.level === "mid");
-    if (existing > -1) {
-      teamState[existing].qty += 1;
-      renderTeam(existing);
-    } else {
-      teamState.push({ role: tbAdd.value, qty: 1, level: "mid" });
-      renderTeam(teamState.length - 1);
-    }
-    tbAdd.value = "";
-  });
-  tbCountry.addEventListener("change", () => renderTeam());
-  document.getElementById("tb-reset").addEventListener("click", () => {
-    teamState = DEFAULT_TEAM.map((r) => ({ ...r }));
-    renderTeam();
-  });
-  renderTeam();
+  /* ---------- What's included: draw the callouts once in view ---------- */
+  const anno = document.getElementById("anno");
+  if (anno && !reduceMotion && "IntersectionObserver" in window) {
+    anno.classList.add("is-armed");
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) {
+        anno.classList.add("is-on");
+        io.disconnect();
+      }
+    }, { threshold: 0.35 });
+    io.observe(anno);
+  }
 })();
