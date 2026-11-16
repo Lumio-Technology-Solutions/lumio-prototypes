@@ -119,7 +119,13 @@
     return new TextDecoder().decode(plain);
   }
 
-  function render(html) {
+  // Swap in the page only once this lock page has finished parsing. Calling
+  // document.open() while the parser is still running appends the page to this
+  // one instead of replacing it, so both pages' elements and styles mix.
+  async function render(html) {
+    if (document.readyState === 'loading') {
+      await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+    }
     document.open();
     document.write(html);
     document.close();

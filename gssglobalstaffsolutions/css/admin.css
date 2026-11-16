@@ -92,7 +92,7 @@ img { display: block; max-width: 100%; }
 .field > label, .field__label { font-size: var(--fs-sm); font-weight: 600; color: var(--navy-900); }
 .field__hint { font-size: var(--fs-xs); color: var(--slate); }
 .input, .select, .textarea {
-  width: 100%; min-height: 48px; padding: 12px 14px; border-radius: var(--r-sm);
+  display: block; width: 100%; min-height: 48px; padding: 12px 14px; border-radius: var(--r-sm);
   border: 1px solid var(--line); background: var(--white); color: var(--ink);
   transition: border-color .2s var(--ease), box-shadow .2s var(--ease);
 }
@@ -158,9 +158,10 @@ img { display: block; max-width: 100%; }
 .check input { width: 18px; height: 18px; margin: 0; accent-color: var(--navy-900); cursor: pointer; }
 .link { color: var(--blue-600); font-weight: 600; text-decoration: none; }
 .link:hover { text-decoration: underline; text-underline-offset: 3px; }
-.pw { position: relative; }
+.pw { display: grid; align-items: center; }
+.pw > * { grid-area: 1 / 1; }
 .pw .input { padding-right: 52px; }
-.pw .icon-btn { position: absolute; right: 6px; top: 50%; translate: 0 -50%; }
+.pw .icon-btn { justify-self: end; margin-right: 6px; }
 .signin__note {
   display: flex; gap: 12px; padding: 14px 16px; border-radius: var(--r-md);
   background: var(--gold-50); color: #6B4B08; font-size: var(--fs-sm);
