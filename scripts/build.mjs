@@ -40,11 +40,11 @@ async function encrypt(key, salt, plaintext, extra = {}) {
   return JSON.stringify({ v: 1, ...extra, iterations: ITERATIONS, salt: b64(salt), iv: b64(iv), data: b64(new Uint8Array(data)) });
 }
 
-// Stamp local css/js links with a hash of the file's contents, so a browser
+// Stamp local css/js/asset links with a hash of the file's contents, so a browser
 // never pairs a new page with a cached old script or stylesheet (or the reverse).
 // Any existing ?v=... on the link is replaced.
 const fingerprint = async (html, projectDir) => {
-  const refs = [...html.matchAll(/(href|src)="((?:css|js)\/[^"?#]+)(?:\?v=[^"]*)?"/g)];
+  const refs = [...html.matchAll(/(href|src)="((?:css|js|assets)\/[^"?#]+)(?:\?v=[^"]*)?"/g)];
   let out = html;
   for (const [match, attr, file] of refs) {
     let hash;
@@ -93,10 +93,15 @@ for (const project of config.projects) {
   const salt = stableSalt(project);
   const key = await makeKey(project.password, salt);
   const pages = (await readdir(path.join(SRC, project.dir))).filter(f => f.endsWith('.html'));
+  // Show the project's favicon on the sign-in screen too, when it has one
+  const iconTag = await fingerprint('<link rel="icon" type="image/png" href="assets/favicon.png">', project.dir);
+  const icon = iconTag.includes('?v=') ? iconTag : '';
   for (const page of pages) {
     const source = await fingerprint(await readFile(path.join(SRC, project.dir, page), 'utf8'), project.dir);
     const payload = await encrypt(key, salt, source, { project: project.dir });
-    const html = lockPage.replaceAll('{{NAME}}', project.name).replace('{{PAYLOAD}}', () => payload);
+    const html = lockPage.replaceAll('{{NAME}}', project.name)
+      .replace('{{ICON}}', icon)
+      .replace('{{PAYLOAD}}', () => payload);
     await writeFile(path.join(ROOT, project.dir, page), html);
     console.log(path.join(project.dir, page));
   }
