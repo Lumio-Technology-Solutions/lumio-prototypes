@@ -66,8 +66,15 @@
     return;
   }
 
-  const CATEGORIES = ["Finance and accounting", "Customer and sales support", "Operations and admin", "Digital marketing", "IT and development", "eCommerce and logistics"];
-  f("category").innerHTML = CATEGORIES.map((c) => `<option>${esc(c)}</option>`).join("");
+  // Dropdowns come from Settings. A job's current value stays available even if
+  // it was later removed from Settings, so editing never changes it silently.
+  const config = window.GSS_loadConfig ? window.GSS_loadConfig() : { categories: [], workTypes: [] };
+  const fillSelect = (name, values, current) => {
+    const list = current && !values.includes(current) ? [...values, current] : values;
+    f(name).innerHTML = list.map((v) => `<option>${esc(v)}</option>`).join("");
+  };
+  fillSelect("category", config.categories, job && job.category);
+  fillSelect("type", config.workTypes, job && job.type);
 
   const editor = $("#f-desc");
   try { document.execCommand("defaultParagraphSeparator", false, "p"); } catch (e) { /* ignore */ }

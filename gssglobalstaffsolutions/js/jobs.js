@@ -159,6 +159,21 @@
   // The admin prototype (admin.html) shares this list and saves edits in the
   // browser. When it has saved jobs, the public pages show its open ones.
   window.GSS_SEED_JOBS = SEED_JOBS;
+
+  // System configuration lists, managed in admin Settings
+  const DEFAULT_CONFIG = {
+    categories: ["Finance and accounting", "Customer and sales support", "Operations and admin", "Digital marketing", "IT and development", "eCommerce and logistics"],
+    workTypes: ["Full-time", "Part-time", "Contract"],
+  };
+  window.GSS_DEFAULT_CONFIG = DEFAULT_CONFIG;
+  window.GSS_loadConfig = () => {
+    let c = null;
+    try { c = JSON.parse(localStorage.getItem("gss-admin-config") || "null"); } catch (e) { c = null; }
+    return {
+      categories: c && Array.isArray(c.categories) ? c.categories : DEFAULT_CONFIG.categories.slice(),
+      workTypes: c && Array.isArray(c.workTypes) ? c.workTypes : DEFAULT_CONFIG.workTypes.slice(),
+    };
+  };
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem("gss-admin-jobs") || "null"); } catch (e) { saved = null; }
   const JOBS = (Array.isArray(saved) ? saved.filter((j) => j.status === "open") : SEED_JOBS)

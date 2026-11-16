@@ -4,7 +4,7 @@
    refresh. Open jobs saved here also show on jobs.html in the same browser.
    ========================================================================== */
 (() => {
-  const KEYS = { session: "gss-admin-session", jobs: "gss-admin-jobs", team: "gss-admin-team" };
+  const KEYS = { session: "gss-admin-session", jobs: "gss-admin-jobs", team: "gss-admin-team", config: "gss-admin-config" };
   const store = {
     get(key) { try { return JSON.parse(localStorage.getItem(key) || "null"); } catch (e) { return null; } },
     set(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { /* private mode: keep in memory */ } },
@@ -40,7 +40,6 @@
   };
 
   /* ---------- Data ---------- */
-  const CATEGORIES = ["Finance and accounting", "Customer and sales support", "Operations and admin", "Digital marketing", "IT and development", "eCommerce and logistics"];
 
   const ROLES = [
     { id: "owner", name: "Owner", desc: "Full access, including billing and removing people." },
@@ -55,6 +54,7 @@
     { label: "Delete jobs", roles: ["owner", "admin"] },
     { label: "Invite people", roles: ["owner", "admin"] },
     { label: "Change roles", roles: ["owner", "admin"] },
+    { label: "Change settings", roles: ["owner", "admin"] },
   ];
   const roleName = (id) => (ROLES.find((r) => r.id === id) || {}).name || id;
 
@@ -154,16 +154,19 @@
   $("#me-btn").addEventListener("click", (e) => { e.stopPropagation(); toggleMenu($("#me-btn"), $("#me-menu")); });
   $("#sign-out").addEventListener("click", () => { store.del(KEYS.session); location.href = "admin-login.html"; });
   $("#reset-data").addEventListener("click", () => {
-    store.del(KEYS.jobs); store.del(KEYS.team);
+    store.del(KEYS.jobs); store.del(KEYS.team); store.del(KEYS.config);
     jobs = seedJobs(); team = seedTeam(); saveJobs(); saveTeam();
+    config = window.GSS_loadConfig ? window.GSS_loadConfig() : config;
     closeMenu(); renderAll(); toast("Prototype data reset");
   });
 
   /* ---------- Views ---------- */
-  const views = { jobs: $("#view-jobs"), team: $("#view-team") };
-  const titles = { jobs: "Jobs | GSS admin", team: "Team and roles | GSS admin" };
+  const views = { jobs: $("#view-jobs"), team: $("#view-team"), settings: $("#view-settings") };
+  const titles = { jobs: "Jobs | GSS admin", team: "Team and roles | GSS admin", settings: "System configuration | GSS admin" };
   const route = () => {
-    const v = location.hash === "#team" ? "team" : "jobs";
+    const [top, sub] = location.hash.slice(1).split("/");
+    const v = views[top] ? top : "jobs";
+    if (v === "settings") { settingsItem = CONFIG_ITEMS.some((c) => c.id === sub) ? sub : CONFIG_ITEMS[0].id; renderSettings(); }
     Object.entries(views).forEach(([k, el]) => { el.hidden = k !== v; });
     document.querySelectorAll(".switch a").forEach((a) => {
       if (a.dataset.view === v) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
@@ -458,8 +461,199 @@
     });
   });
 
+  /* ==========================================================================
+     System configuration
+     ========================================================================== */
+  const CONFIG_ITEMS = [
+    {
+      id: "categories", key: "categories", jobField: "category",
+      name: "Job categories", one: "category",
+      desc: "Group your jobs. Candidates see the category on every job and can filter by it.",
+      placeholder: "For example, Healthcare",
+      icon: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>',
+    },
+    {
+      id: "work-types", key: "workTypes", jobField: "type",
+      name: "Work types", one: "work type",
+      desc: "How someone is employed in the role, like full-time or contract.",
+      placeholder: "For example, Project-based",
+      icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/></svg>',
+    },
+  ];
+  let config = window.GSS_loadConfig ? window.GSS_loadConfig() : { categories: [], workTypes: [] };
+  let settingsItem = CONFIG_ITEMS[0].id;
+  let renaming = null;
+  const saveConfig = () => store.set(KEYS.config, config);
+  const canEditSettings = () => ["owner", "admin"].includes(me().role);
+  const usage = (item, value) => jobs.filter((j) => j[item.jobField] === value).length;
+  const countOf = (n, one) => `${n} ${n === 1 ? one : one.endsWith("y") ? `${one.slice(0, -1)}ies` : `${one}s`}`;
+  const sameText = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+  const IC = {
+    pencil: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4ZM13.5 6.5l4 4"/></svg>',
+    up: '<svg viewBox="0 0 24 24"><path d="m6 14 6-6 6 6"/></svg>',
+    down: '<svg viewBox="0 0 24 24"><path d="m6 10 6 6 6-6"/></svg>',
+    trash: ICON.trash,
+    plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  };
+
+  const renderSettings = () => {
+    const editable = canEditSettings();
+    $("#settings-nav").innerHTML = CONFIG_ITEMS.map((c) => `
+      <a href="#settings/${c.id}" class="settings__link" ${c.id === settingsItem ? 'aria-current="page"' : ""}>
+        <span class="settings__icon" aria-hidden="true">${c.icon}</span>
+        <span class="settings__text"><strong>${c.name}</strong><span>${countOf(config[c.key].length, c.one)}</span></span>
+      </a>`).join("");
+
+    const item = CONFIG_ITEMS.find((c) => c.id === settingsItem);
+    const values = config[item.key];
+    const cap = item.one[0].toUpperCase() + item.one.slice(1);
+    $("#settings-panel").innerHTML = `
+      <div class="settings__head">
+        <h2>${item.name}</h2>
+        <p>${item.desc}</p>
+      </div>
+      ${editable ? `
+      <form class="settings__add" id="config-add" novalidate autocomplete="off">
+        <label class="sr-only" for="config-new">New ${item.one}</label>
+        <input class="input" id="config-new" placeholder="${item.placeholder}" aria-describedby="config-new-error">
+        <button class="btn btn--navy" type="submit">${IC.plus}Add ${item.one}</button>
+      </form>
+      <p class="field__error" id="config-new-error" role="alert"></p>` : `
+      <p class="settings__readonly">Only owners and admins can change these.</p>`}
+      ${values.length ? `
+      <ol class="config-list" id="config-list">
+        ${values.map((v, i) => {
+          const used = usage(item, v);
+          if (renaming === i) {
+            return `
+          <li class="config-row is-editing" data-i="${i}">
+            <form class="config-row__edit" data-act="rename-form" novalidate>
+              <label class="sr-only" for="config-rename">Rename ${esc(v)}</label>
+              <input class="input" id="config-rename" value="${esc(v)}" aria-describedby="config-rename-error">
+              <button class="btn btn--navy" type="submit">Save</button>
+              <button class="btn btn--quiet" type="button" data-act="rename-cancel">Cancel</button>
+            </form>
+            <p class="field__error" id="config-rename-error" role="alert"></p>
+            ${used ? `<p class="config-row__note">${plural(used, "job")} will update to the new name.</p>` : ""}
+          </li>`;
+          }
+          return `
+          <li class="config-row" data-i="${i}">
+            <span class="config-row__name">${esc(v)}</span>
+            <span class="config-row__used">${used ? `Used by ${plural(used, "job")}` : "Not used yet"}</span>
+            ${editable ? `
+            <span class="config-row__actions">
+              <button class="icon-btn" type="button" data-act="up" aria-label="Move ${esc(v)} up" ${i === 0 ? "disabled" : ""}>${IC.up}</button>
+              <button class="icon-btn" type="button" data-act="down" aria-label="Move ${esc(v)} down" ${i === values.length - 1 ? "disabled" : ""}>${IC.down}</button>
+              <button class="icon-btn" type="button" data-act="rename" aria-label="Rename ${esc(v)}">${IC.pencil}</button>
+              <button class="icon-btn icon-btn--danger" type="button" data-act="delete" aria-label="Delete ${esc(v)}"
+                ${used ? `aria-disabled="true" title="Used by ${plural(used, "job")}. Move ${used === 1 ? "it" : "them"} to another ${item.one} first."` : ""}>${IC.trash}</button>
+            </span>` : ""}
+          </li>`;
+        }).join("")}
+      </ol>
+      <p class="settings__foot">The order here is the order in the job form.</p>` : `
+      <div class="empty empty--small">
+        <h3>No ${item.name.toLowerCase()} yet</h3>
+        <p>Add your first ${item.one} above. It'll show up in the job form straight away.</p>
+      </div>`}`;
+
+    const rename = $("#config-rename");
+    if (rename) { rename.focus(); rename.select(); }
+  };
+
+  const setConfigError = (id, msg) => {
+    const input = $(`#${id}`);
+    if (!input) return;
+    input.setAttribute("aria-invalid", msg ? "true" : "false");
+    $(`#${id}-error`).textContent = msg;
+  };
+
+  const validateValue = (item, value, ignoreIndex = -1) => {
+    if (!value.trim()) return `Enter a ${item.one} name.`;
+    if (value.trim().length > 60) return "Keep it under 60 characters.";
+    if (config[item.key].some((v, i) => i !== ignoreIndex && sameText(v, value))) return `"${value.trim()}" is already in the list.`;
+    return "";
+  };
+
+  $("#settings-panel").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const item = CONFIG_ITEMS.find((c) => c.id === settingsItem);
+    if (e.target.id === "config-add") {
+      const input = $("#config-new");
+      const err = validateValue(item, input.value);
+      if (err) { setConfigError("config-new", err); input.focus(); return; }
+      config[item.key].push(input.value.trim());
+      saveConfig(); renderSettings();
+      toast(`${input.value.trim()} added`);
+      $("#config-new").focus();
+      return;
+    }
+    if (e.target.dataset.act === "rename-form") {
+      const i = renaming;
+      const oldName = config[item.key][i];
+      const input = $("#config-rename");
+      const next = input.value.trim();
+      const err = validateValue(item, next, i);
+      if (err) { setConfigError("config-rename", err); input.focus(); return; }
+      renaming = null;
+      if (next === oldName) { renderSettings(); return; }
+      const affected = jobs.filter((j) => j[item.jobField] === oldName);
+      config[item.key][i] = next;
+      affected.forEach((j) => { j[item.jobField] = next; });
+      saveConfig(); saveJobs(); renderSettings(); renderJobs();
+      toast(`Renamed to ${next}${affected.length ? ` and updated ${plural(affected.length, "job")}` : ""}`, () => {
+        config[item.key][i] = oldName;
+        affected.forEach((j) => { j[item.jobField] = oldName; });
+        saveConfig(); saveJobs(); renderSettings(); renderJobs();
+      });
+    }
+  });
+
+  $("#settings-panel").addEventListener("input", (e) => {
+    if (e.target.id === "config-new" || e.target.id === "config-rename") setConfigError(e.target.id, "");
+  });
+
+  $("#settings-panel").addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && renaming !== null) { renaming = null; renderSettings(); }
+  });
+
+  $("#settings-panel").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-act]");
+    if (!btn || btn.tagName === "FORM") return;
+    const item = CONFIG_ITEMS.find((c) => c.id === settingsItem);
+    const list = config[item.key];
+    const row = btn.closest(".config-row");
+    const i = row ? Number(row.dataset.i) : -1;
+    const act = btn.dataset.act;
+
+    if (act === "rename-cancel") { renaming = null; renderSettings(); return; }
+    if (act === "rename") { renaming = i; renderSettings(); return; }
+    if (act === "up" || act === "down") {
+      const j = act === "up" ? i - 1 : i + 1;
+      if (j < 0 || j >= list.length) return;
+      [list[i], list[j]] = [list[j], list[i]];
+      saveConfig(); renderSettings();
+      const moved = $(`#config-list [data-i="${j}"] [data-act="${act}"]`);
+      (moved && !moved.disabled ? moved : $(`#config-list [data-i="${j}"] [data-act="rename"]`)).focus();
+      return;
+    }
+    if (act === "delete") {
+      const value = list[i];
+      const used = usage(item, value);
+      if (used) {
+        toast(`${value} is used by ${plural(used, "job")}. Move ${used === 1 ? "it" : "them"} to another ${item.one} first.`);
+        return;
+      }
+      list.splice(i, 1);
+      saveConfig(); renderSettings();
+      toast(`${value} deleted`, () => { list.splice(i, 0, value); saveConfig(); renderSettings(); });
+    }
+  });
+
   /* ---------- Go ---------- */
-  const renderAll = () => { renderMe(); renderJobs(); renderMatrix(); renderTeam(); };
+  const renderAll = () => { renderMe(); renderJobs(); renderMatrix(); renderTeam(); renderSettings(); };
   renderAll();
   route();
 
