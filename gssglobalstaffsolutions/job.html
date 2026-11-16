@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Sign in · GSS Global Staff Solutions prototype</title>
+<style>
+  :root {
+    --fg: #1f2328;
+    --fg-muted: #59636e;
+    --bg: #ffffff;
+    --bg-subtle: #f6f8fa;
+    --border: #d1d9e0;
+    --accent: #0969da;
+    --success: #1f883d;
+    --danger: #d1242f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  form {
+    max-width: 340px;
+    margin: 0 auto;
+    padding: 64px 16px 32px;
+    text-align: center;
+  }
+  svg { fill: var(--fg-muted); }
+  h1 {
+    margin: 16px 0;
+    font-size: 24px;
+    font-weight: 300;
+    letter-spacing: -0.5px;
+  }
+  .box {
+    padding: 16px;
+    text-align: left;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  label { display: block; margin-bottom: 8px; }
+  input {
+    width: 100%;
+    margin-bottom: 16px;
+    padding: 5px 12px;
+    font: inherit;
+    line-height: 20px;
+    color: var(--fg);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .error { margin: -8px 0 16px; font-size: 12px; color: var(--danger); }
+  button {
+    width: 100%;
+    padding: 5px 16px;
+    font: inherit;
+    font-weight: 500;
+    line-height: 20px;
+    color: #fff;
+    background: var(--success);
+    border: 1px solid #1f232826;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  button:hover { background: #1c8139; }
+  button:disabled { opacity: 0.7; cursor: progress; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<form id="signin" autocomplete="off" hidden>
+  <svg width="32" height="32" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V7.25C6 3.845 8.503 1 12 1s6 2.845 6 6.25V9h.5a2.5 2.5 0 0 1 2.5 2.5v8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 19.5v-8A2.5 2.5 0 0 1 5.5 9Zm-1.5 2.5v8a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-13a1 1 0 0 0-1 1Zm3-4.25V9h9V7.25c0-2.67-1.922-4.75-4.5-4.75-2.578 0-4.5 2.08-4.5 4.75Z"/></svg>
+  <h1>Sign in to view GSS Global Staff Solutions prototype</h1>
+  <div class="box">
+    <label for="password">Password</label>
+    <input id="password" type="password" required>
+    <p class="error" id="error" role="alert" hidden>Incorrect password. Check it and try again.</p>
+    <button type="submit" id="submit">Sign in</button>
+  </div>
+</form>
+
+<script type="application/json" id="payload">{"v":1,"project":"gssglobalstaffsolutions","iterations":600000,"salt":"s9lKydvP6ArnodYAIKAOEw==","iv":"6ymoiJazJ6x1JGM/","data":"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"}</script>
+
+<script>
+(() => {
+  const payload = JSON.parse(document.getElementById('payload').textContent);
+  const STORAGE_KEY = 'lumio-key:' + payload.project;
+  const form = document.getElementById('signin');
+  const input = document.getElementById('password');
+  const submit = document.getElementById('submit');
+  const error = document.getElementById('error');
+
+  const fromB64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  const toB64 = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes)));
+
+  async function deriveKey(password) {
+    const baseKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt: fromB64(payload.salt), iterations: payload.iterations, hash: 'SHA-256' },
+      baseKey,
+      { name: 'AES-GCM', length: 256 },
+      true,
+      ['decrypt']
+    );
+  }
+
+  async function decrypt(key) {
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(payload.iv) }, key, fromB64(payload.data));
+    return new TextDecoder().decode(plain);
+  }
+
+  function render(html) {
+    document.open();
+    document.write(html);
+    document.close();
+  }
+
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    error.hidden = true;
+    submit.disabled = true;
+    submit.textContent = 'Signing in…';
+    try {
+      const key = await deriveKey(input.value);
+      const html = await decrypt(key);
+      try { sessionStorage.setItem(STORAGE_KEY, toB64(await crypto.subtle.exportKey('raw', key))); } catch {}
+      render(html);
+    } catch {
+      error.hidden = false;
+      submit.disabled = false;
+      submit.textContent = 'Sign in';
+      input.select();
+    }
+  });
+
+  // One sign-in unlocks every page of this project for the browser tab
+  (async () => {
+    let saved = null;
+    try { saved = sessionStorage.getItem(STORAGE_KEY); } catch {}
+    if (saved) {
+      try {
+        const key = await crypto.subtle.importKey('raw', fromB64(saved), 'AES-GCM', false, ['decrypt']);
+        return render(await decrypt(key));
+      } catch {
+        try { sessionStorage.removeItem(STORAGE_KEY); } catch {}
+      }
+    }
+    form.hidden = false;
+    input.focus();
+  })();
+})();
+</script>
+</body>
+</html>

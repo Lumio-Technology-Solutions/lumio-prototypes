@@ -29,6 +29,9 @@
   document.getElementById("year").textContent = new Date().getFullYear();
 
   /* ---------- Follow-the-sun dial ---------- */
+  // Job pages share this script but have no dial or home-page sections.
+  if (!document.getElementById("ticks")) return;
+
   const SVGNS = "http://www.w3.org/2000/svg";
   const C = 300;
   const R_OUTER = 286;
@@ -75,10 +78,7 @@
   const sameAsTeam = tzOffsetHours(userTz, new Date()) === tzOffsetHours(TEAM_TZ, new Date());
   if (sameAsTeam) {
     userTz = "America/New_York";
-    document.getElementById("your-label").textContent = "Client";
   }
-  const city = (userTz.split("/").pop() || "your city").replace(/_/g, " ");
-  document.getElementById("your-city").textContent = city;
 
   const arcPath = (startH, endH, r) => {
     const span = ((endH - startH) % 24 + 24) % 24;
@@ -90,12 +90,9 @@
 
   const fmt = (tz) => new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" });
   const fmtTeam = fmt(TEAM_TZ);
-  const fmtUser = fmt(userTz);
 
   const shiftArc = document.getElementById("shift-arc");
   const sun = document.getElementById("sun");
-  const statusEl = document.getElementById("shift-status");
-  const pulse = document.querySelector(".pulse");
 
   const tick = () => {
     const now = new Date();
@@ -108,23 +105,10 @@
     const get = (t) => (teamParts.find((p) => p.type === t) || {}).value;
     document.getElementById("manila-time").textContent = `${get("hour")}:${get("minute")}`;
     document.getElementById("manila-ampm").textContent = get("dayPeriod") || "";
-    document.getElementById("your-time").textContent = fmtUser.format(now);
 
     const teamHour = (now.getUTCHours() + now.getUTCMinutes() / 60 + tzOffsetHours(TEAM_TZ, now) + 24) % 24;
     const [x, y] = polar(teamHour, R_ARC);
     sun.setAttribute("transform", `translate(${x} ${y})`);
-
-    // Is the team inside the shift window right now?
-    const sinceStart = ((teamHour - startTeam) % 24 + 24) % 24;
-    const span = ((endTeam - startTeam) % 24 + 24) % 24;
-    const onShift = sinceStart < span;
-    if (onShift) {
-      statusEl.textContent = "on shift";
-    } else {
-      const hrs = Math.max(1, Math.round(24 - sinceStart));
-      statusEl.textContent = `back on shift in ${hrs}h`;
-    }
-    pulse.classList.toggle("is-off", !onShift);
   };
   tick();
   setInterval(tick, 15000);
@@ -153,54 +137,6 @@
       update();
     }
   }
-
-  /* ---------- Roles explorer ---------- */
-  const tabs = [...document.querySelectorAll(".role-tab")];
-  const roleImg = document.getElementById("role-img");
-  const chips = document.getElementById("role-chips");
-
-  const showRoles = (tab) => {
-    chips.innerHTML = tab.dataset.roles
-      .split("|")
-      .map((r, i) => `<span style="--i:${i}">${r}</span>`)
-      .join("");
-    roleImg.alt = `${tab.querySelector(".role-tab__name").textContent} team`;
-  };
-
-  const select = (tab, focus = false) => {
-    tabs.forEach((t) => {
-      const on = t === tab;
-      t.setAttribute("aria-selected", String(on));
-      t.tabIndex = on ? 0 : -1;
-    });
-    if (focus) tab.focus();
-    const next = tab.dataset.img;
-    if (roleImg.src !== next) {
-      roleImg.classList.add("is-swapping");
-      const pre = new Image();
-      pre.onload = pre.onerror = () => {
-        roleImg.src = next;
-        requestAnimationFrame(() => roleImg.classList.remove("is-swapping"));
-      };
-      pre.src = next;
-    }
-    showRoles(tab);
-  };
-
-  tabs.forEach((tab, i) => {
-    tab.tabIndex = i === 0 ? 0 : -1;
-    tab.addEventListener("click", () => select(tab));
-    tab.addEventListener("keydown", (e) => {
-      const dir = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
-      if (dir) {
-        e.preventDefault();
-        select(tabs[(i + dir + tabs.length) % tabs.length], true);
-      }
-    });
-  });
-  showRoles(tabs[0]);
-  // warm the cache so switching feels instant
-  tabs.slice(1).forEach((t) => { const im = new Image(); im.src = t.dataset.img; });
 
   /* ---------- What's included: draw the callouts once in view ---------- */
   const anno = document.getElementById("anno");
