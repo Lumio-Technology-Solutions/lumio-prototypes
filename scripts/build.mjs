@@ -40,12 +40,25 @@ async function encrypt(key, salt, plaintext, extra = {}) {
   return JSON.stringify({ v: 1, ...extra, iterations: ITERATIONS, salt: b64(salt), iv: b64(iv), data: b64(new Uint8Array(data)) });
 }
 
-const config = JSON.parse(await readFile(path.join(SRC, 'config.json'), 'utf8'));
+const CONFIG_PATH = path.join(SRC, 'config.json');
+const config = JSON.parse(await readFile(CONFIG_PATH, 'utf8'));
+
+// Keep one salt per project across builds (saved in the git-ignored config).
+// The key then stays the same between deploys, so a tab that has unlocked a
+// project isn't asked again after a rebuild or by a page the CDN cached.
+let configChanged = false;
+const stableSalt = entry => {
+  if (!entry.salt) {
+    entry.salt = b64(crypto.getRandomValues(new Uint8Array(16)));
+    configChanged = true;
+  }
+  return Uint8Array.from(Buffer.from(entry.salt, 'base64'));
+};
 const lockPage = await readFile(path.join(ROOT, 'scripts/lock-page.html'), 'utf8');
 
 // Root index
 {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const salt = stableSalt(config.index);
   const key = await makeKey(config.index.password, salt);
   const payload = await encrypt(key, salt, await readFile(path.join(SRC, 'prototypes.html'), 'utf8'));
   const target = path.join(ROOT, 'index.html');
@@ -59,7 +72,7 @@ const lockPage = await readFile(path.join(ROOT, 'scripts/lock-page.html'), 'utf8
 
 // Prototypes
 for (const project of config.projects) {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const salt = stableSalt(project);
   const key = await makeKey(project.password, salt);
   const pages = (await readdir(path.join(SRC, project.dir))).filter(f => f.endsWith('.html'));
   for (const page of pages) {
@@ -69,4 +82,9 @@ for (const project of config.projects) {
     await writeFile(path.join(ROOT, project.dir, page), html);
     console.log(path.join(project.dir, page));
   }
+}
+
+if (configChanged) {
+  await writeFile(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
+  console.log('src/config.json (saved project salts)');
 }
