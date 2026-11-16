@@ -161,6 +161,7 @@ img { display: block; max-width: 100%; }
 .pw { display: grid; align-items: center; }
 .pw > * { grid-area: 1 / 1; }
 .pw .input { padding-right: 52px; }
+.pw .input.is-masked { -webkit-text-security: disc; text-security: disc; }
 .pw .icon-btn { justify-self: end; margin-right: 6px; }
 .signin__note {
   display: flex; gap: 12px; padding: 14px 16px; border-radius: var(--r-md);
