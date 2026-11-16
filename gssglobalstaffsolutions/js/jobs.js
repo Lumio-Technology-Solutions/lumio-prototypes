@@ -168,6 +168,63 @@
   const escape = (s) =>
     String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+  /* ---------- Job description (free text, light formatting) ----------
+     Descriptions are written in the admin's editor and stored as HTML. Only
+     simple formatting is kept: paragraphs, headings, bold, italic and lists.
+     Everything else is unwrapped to plain text, and all attributes dropped. */
+  const ALLOWED = {
+    P: "p", DIV: "p", BR: "br", HR: "hr",
+    STRONG: "strong", B: "strong", EM: "em", I: "em", U: "u", S: "s", STRIKE: "s", DEL: "s",
+    UL: "ul", OL: "ol", LI: "li", BLOCKQUOTE: "blockquote", A: "a",
+    H1: "h3", H2: "h3", H3: "h3", H4: "h4", H5: "h4", H6: "h4",
+  };
+  const ALIGNABLE = new Set(["p", "h3", "h4", "li", "blockquote"]);
+  const safeHref = (href) => {
+    const h = String(href || "").trim();
+    return /^(https?:|mailto:)/i.test(h) ? h : null;
+  };
+  const sanitizeDescription = (html) => {
+    const tpl = document.createElement("template");
+    tpl.innerHTML = String(html || "");
+    const clean = (node) => {
+      const out = document.createDocumentFragment();
+      node.childNodes.forEach((child) => {
+        if (child.nodeType === 3) { out.appendChild(document.createTextNode(child.textContent)); return; }
+        if (child.nodeType !== 1) return;
+        const tag = ALLOWED[child.tagName];
+        if (!tag) { out.appendChild(clean(child)); return; }
+        if (tag === "a" && !safeHref(child.getAttribute("href"))) { out.appendChild(clean(child)); return; }
+        const el = document.createElement(tag);
+        if (tag === "a") { el.setAttribute("href", safeHref(child.getAttribute("href"))); }
+        const align = (child.style && child.style.textAlign) || child.getAttribute("align") || "";
+        if (ALIGNABLE.has(tag) && /^(center|right)$/.test(align)) el.className = `align-${align}`;
+        if (tag !== "br" && tag !== "hr") el.appendChild(clean(child));
+        out.appendChild(el);
+      });
+      return out;
+    };
+    const box = document.createElement("div");
+    box.appendChild(clean(tpl.content));
+    box.querySelectorAll("p, h3, h4, li").forEach((el) => { if (!el.textContent.trim() && !el.querySelector("br")) el.remove(); });
+    return box.innerHTML.trim();
+  };
+
+  // Links in a job description open in a new tab on the public page
+  const publicDescription = (html) => html.replace(/<a href=/g, '<a target="_blank" rel="noopener" href=');
+
+  // Jobs written before the free-text editor kept separate fields
+  const descriptionOf = (job) => {
+    if (job.description) return sanitizeDescription(job.description);
+    const list = (arr) => (arr && arr.length ? `<ul>${arr.map((x) => `<li>${escape(x)}</li>`).join("")}</ul>` : "");
+    return [
+      job.summary ? `<p>${escape(job.summary)}</p>` : "",
+      job.responsibilities && job.responsibilities.length ? `<h3>What you'll do</h3>${list(job.responsibilities)}` : "",
+      job.requirements && job.requirements.length ? `<h3>What you'll need</h3>${list(job.requirements)}` : "",
+    ].join("");
+  };
+  window.GSS_sanitizeDescription = sanitizeDescription;
+  window.GSS_descriptionOf = descriptionOf;
+
   const fmtDate = (iso) =>
     new Date(`${iso}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
 
@@ -232,8 +289,11 @@
   /* ---------- Job details ---------- */
   const detail = document.getElementById("job-detail");
   if (detail) {
-    const id = new URLSearchParams(window.location.search).get("id");
-    const job = JOBS.find((j) => j.id === id);
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("id");
+    // ?preview=1 lets the admin see a draft or closed job as candidates would
+    const preview = params.get("preview") === "1" && Array.isArray(saved);
+    const job = preview ? saved.find((j) => j.id === id) : JOBS.find((j) => j.id === id);
 
     if (!job) {
       document.title = "Job not found | GSS Global Staff Solutions";
@@ -249,19 +309,18 @@
     document.title = `${job.title} | GSS Global Staff Solutions`;
     const items = (arr) => arr.map((x) => `<li>${escape(x)}</li>`).join("");
 
+    const previewNote = preview && job.status !== "open"
+      ? `<p class="job-preview" role="note"><strong>Preview.</strong> This ${job.status === "draft" ? "draft" : "closed job"} isn't on your careers page, so candidates can't see it.</p>`
+      : "";
+
     detail.innerHTML = `
+      ${previewNote}
       <a class="job-back" href="jobs.html"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8H3M7 4 3 8l4 4"/></svg>All jobs</a>
       <div class="job-detail__layout">
         <article class="job-detail__body">
           <p class="job-detail__cat">${escape(job.category)}</p>
           <h1>${escape(job.title)}</h1>
-          <p class="job-detail__summary">${escape(job.summary)}</p>
-
-          <h2>What you'll do</h2>
-          <ul class="job-list-points">${items(job.responsibilities)}</ul>
-
-          <h2>What you'll need</h2>
-          <ul class="job-list-points">${items(job.requirements)}</ul>
+          <div class="job-detail__desc">${publicDescription(descriptionOf(job))}</div>
 
           <h2>What you get</h2>
           <ul class="job-list-points job-list-points--perks">${items(PERKS)}</ul>

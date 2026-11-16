@@ -11,7 +11,7 @@
 // shares one salt, so one sign-in unlocks all of its pages for the browser tab.
 
 import { readFile, writeFile, readdir } from 'node:fs/promises';
-import { webcrypto as crypto } from 'node:crypto';
+import { webcrypto as crypto, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -39,6 +39,24 @@ async function encrypt(key, salt, plaintext, extra = {}) {
   const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(plaintext));
   return JSON.stringify({ v: 1, ...extra, iterations: ITERATIONS, salt: b64(salt), iv: b64(iv), data: b64(new Uint8Array(data)) });
 }
+
+// Stamp local css/js links with a hash of the file's contents, so a browser
+// never pairs a new page with a cached old script or stylesheet (or the reverse).
+// Any existing ?v=... on the link is replaced.
+const fingerprint = async (html, projectDir) => {
+  const refs = [...html.matchAll(/(href|src)="((?:css|js)\/[^"?#]+)(?:\?v=[^"]*)?"/g)];
+  let out = html;
+  for (const [match, attr, file] of refs) {
+    let hash;
+    try {
+      hash = createHash('sha1').update(await readFile(path.join(ROOT, projectDir, file))).digest('hex').slice(0, 10);
+    } catch {
+      continue; // not a local file in this project; leave the link alone
+    }
+    out = out.replace(match, `${attr}="${file}?v=${hash}"`);
+  }
+  return out;
+};
 
 const CONFIG_PATH = path.join(SRC, 'config.json');
 const config = JSON.parse(await readFile(CONFIG_PATH, 'utf8'));
@@ -76,7 +94,7 @@ for (const project of config.projects) {
   const key = await makeKey(project.password, salt);
   const pages = (await readdir(path.join(SRC, project.dir))).filter(f => f.endsWith('.html'));
   for (const page of pages) {
-    const source = await readFile(path.join(SRC, project.dir, page), 'utf8');
+    const source = await fingerprint(await readFile(path.join(SRC, project.dir, page), 'utf8'), project.dir);
     const payload = await encrypt(key, salt, source, { project: project.dir });
     const html = lockPage.replaceAll('{{NAME}}', project.name).replace('{{PAYLOAD}}', () => payload);
     await writeFile(path.join(ROOT, project.dir, page), html);

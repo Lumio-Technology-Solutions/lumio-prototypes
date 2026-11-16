@@ -406,6 +406,10 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 
 /* ---------- Job details ---------- */
 .job-detail { padding-block: clamp(32px, 5vw, 64px) clamp(80px, 11vw, 140px); }
+.job-preview {
+  margin-bottom: 24px; padding: 14px 18px; border-radius: var(--r-sm);
+  background: #FCF3DF; color: #6B4B08; font-size: var(--fs-sm); box-shadow: inset 0 0 0 1px #F1DDAF;
+}
 .job-back {
   display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
   font-size: var(--fs-sm); font-weight: 500; color: var(--slate);
@@ -419,6 +423,23 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .job-detail__body h1 { margin-top: 10px; font-size: var(--fs-2xl); letter-spacing: -0.03em; }
 .job-detail__summary { margin-top: 20px; font-size: var(--fs-md); line-height: 1.65; color: var(--ink); }
 .job-detail__body h2 { margin-top: 48px; font-size: var(--fs-lg); letter-spacing: -0.02em; }
+.job-detail__desc { margin-top: 20px; }
+.job-detail__desc > :first-child { margin-top: 0; }
+.job-detail__desc p { margin-top: 16px; font-size: var(--fs-md); line-height: 1.65; color: var(--ink); }
+.job-detail__desc h3 { margin-top: 44px; font-size: var(--fs-lg); letter-spacing: -0.02em; line-height: 1.2; }
+.job-detail__desc ul, .job-detail__desc ol { margin-top: 16px; display: grid; gap: 12px; }
+.job-detail__desc ul li { position: relative; padding-left: 26px; line-height: 1.55; }
+.job-detail__desc ul li::before { content: ""; position: absolute; left: 4px; top: .62em; width: 7px; height: 7px; border-radius: 2px; background: var(--gold); rotate: 45deg; }
+.job-detail__desc ol { list-style: decimal; padding-left: 1.4em; }
+.job-detail__desc ol li { padding-left: 6px; line-height: 1.55; }
+.job-detail__desc ol li::marker { color: var(--slate); font-weight: 600; }
+.job-detail__desc h4 { margin-top: 28px; font-size: var(--fs-md); letter-spacing: -0.015em; }
+.job-detail__desc blockquote { margin: 20px 0 0; padding: 4px 0 4px 20px; border-left: 3px solid var(--gold); color: var(--slate); font-size: var(--fs-md); }
+.job-detail__desc blockquote p { margin-top: 0; }
+.job-detail__desc hr { margin: 32px 0; border: 0; border-top: 1px solid var(--line); }
+.job-detail__desc a { color: var(--blue-600); text-underline-offset: 3px; }
+.job-detail__desc .align-center { text-align: center; }
+.job-detail__desc .align-right { text-align: right; }
 .job-list-points { margin-top: 16px; display: grid; gap: 12px; }
 .job-list-points li { position: relative; padding-left: 26px; color: var(--ink); line-height: 1.55; }
 .job-list-points li::before { content: ""; position: absolute; left: 4px; top: .62em; width: 7px; height: 7px; border-radius: 2px; background: var(--gold); rotate: 45deg; }

@@ -185,7 +185,6 @@
     const applicants = open.reduce((a, j) => a + (j.applicants || 0), 0);
     const closed = jobs.filter((j) => j.status === "closed").length;
     const topJob = open.slice().sort((a, b) => (b.applicants || 0) - (a.applicants || 0))[0];
-    const topApplicants = Math.max(1, topJob ? topJob.applicants || 0 : 1);
     const lead = drafts
       ? `${plural(drafts, "draft")} waiting to be published`
       : "Every job is up to date";
@@ -209,11 +208,10 @@
       </dl>
       <dl class="stat">
         <dt>Applicants on open jobs</dt><dd class="num">${applicants}</dd>
-        <div class="viz-bars" aria-hidden="true">
-          ${open.slice().sort((a, b) => (b.applicants || 0) - (a.applicants || 0)).map((j) =>
-            `<i style="height:${Math.max(8, Math.round(((j.applicants || 0) / topApplicants) * 100))}%" title="${esc(j.title)}: ${j.applicants || 0}"></i>`).join("")}
-        </div>
-        <div class="viz-legend" aria-hidden="true"><span>Most: ${esc(topJob ? topJob.title : "None yet")}</span></div>
+        <p class="viz-fact" title="${topJob ? esc(topJob.title) : ""}">
+          <span>Most applied</span>
+          <b>${topJob && topJob.applicants ? `${esc(topJob.title)} (${topJob.applicants})` : "None yet"}</b>
+        </p>
       </dl>
       <dl class="stat">
         <dt>Team members</dt><dd class="num">${team.length}</dd>
@@ -253,7 +251,6 @@
       .filter((j) => jobFilter === "all" || j.status === jobFilter)
       .filter((j) => !q || `${j.title} ${j.category}`.toLowerCase().includes(q))
       .sort((a, b) => ({ draft: 0, open: 1, closed: 2 }[a.status] - { draft: 0, open: 1, closed: 2 }[b.status]) || b.posted.localeCompare(a.posted));
-    const max = Math.max(1, ...jobs.map((j) => j.applicants || 0));
     const list = $("#admin-job-list");
 
     if (!shown.length) {
@@ -281,7 +278,6 @@
           <div class="cell-muted col-where">${esc(j.location)}<br>${esc(j.shift)}</div>
           <div class="applicants">
             <b class="num">${j.applicants || 0}</b>
-            <span class="applicants__bar" aria-hidden="true"><i style="width:${Math.round(((j.applicants || 0) / max) * 100)}%"></i></span>
           </div>
           <div><span class="status status--${j.status}">${{ open: "Open", draft: "Draft", closed: "Closed" }[j.status]}</span></div>
           <div class="cell-muted col-posted">${j.status === "draft" ? "Not posted" : fmtDate(j.posted)}</div>
@@ -291,6 +287,11 @@
           </div>
         </div>`).join("")}`;
     jobs.forEach((j) => delete j._new);
+  };
+
+  const setFieldError = (input, msg) => {
+    input.setAttribute("aria-invalid", msg ? "true" : "false");
+    $(`#${input.id}-error`).textContent = msg;
   };
 
   const setJobStatus = (j, status) => {
@@ -330,7 +331,7 @@
     if (act === "publish") setJobStatus(j, "open");
     if (act === "close") setJobStatus(j, "closed");
     if (act === "duplicate") {
-      const copy = { ...j, id: `${slug(j.title)}-${Date.now().toString(36)}`, title: `${j.title} (copy)`, status: "draft", applicants: 0, posted: today(), _new: true };
+      const copy = { ...j, description: window.GSS_descriptionOf ? window.GSS_descriptionOf(j) : j.description, id: `${slug(j.title)}-${Date.now().toString(36)}`, title: `${j.title} (copy)`, status: "draft", applicants: 0, posted: today(), _new: true };
       jobs.unshift(copy); saveJobs(); jobFilter = "all"; renderJobs(); toast("Job duplicated as a draft");
     }
     if (act === "delete") deleteJob(j);
@@ -342,80 +343,8 @@
     toast(`${j.title} deleted`, () => { jobs.splice(idx, 0, j); saveJobs(); renderJobs(); });
   };
 
-  /* ---------- Job drawer ---------- */
-  const drawer = $("#job-drawer");
-  const form = $("#job-form");
-  let editing = null;
-  $("#f-category").innerHTML = CATEGORIES.map((c) => `<option>${esc(c)}</option>`).join("");
-
-  const openJob = (j) => {
-    editing = j;
-    $("#drawer-title").textContent = j ? "Edit job" : "Post a job";
-    $("#drawer-sub").textContent = j
-      ? `${j.applicants || 0} applicants so far. Changes show on the careers page as soon as you save.`
-      : "Fill in the details. You can save it as a draft and publish later.";
-    form.title.value = j ? j.title : "";
-    form.category.value = j ? j.category : CATEGORIES[0];
-    form.type.value = j ? j.type : "Full-time";
-    form.location.value = j ? j.location : "Remote, Philippines";
-    form.shift.value = j ? j.shift : "";
-    form.summary.value = j ? j.summary : "";
-    form.responsibilities.value = j ? j.responsibilities.join("\n") : "";
-    form.requirements.value = j ? j.requirements.join("\n") : "";
-    form.querySelector(`input[name="status"][value="${j ? j.status : "draft"}"]`).checked = true;
-    $("#delete-job").hidden = !j;
-    setFieldError(form.title, "");
-    updateSaveLabel();
-    drawer.showModal();
-    form.title.focus();
-  };
-
-  const updateSaveLabel = () => {
-    const st = form.querySelector('input[name="status"]:checked').value;
-    const wasOpen = editing && editing.status === "open";
-    $("#save-job").textContent = st === "open" && !wasOpen ? "Publish job" : st === "draft" && !editing ? "Save draft" : "Save changes";
-  };
-  form.addEventListener("change", (e) => { if (e.target.name === "status") updateSaveLabel(); });
-
-  const setFieldError = (input, msg) => {
-    input.setAttribute("aria-invalid", msg ? "true" : "false");
-    $(`#${input.id}-error`).textContent = msg;
-  };
-  form.title.addEventListener("input", () => setFieldError(form.title, ""));
-
-  form.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const title = form.title.value.trim();
-    if (!title) { setFieldError(form.title, "Add a job title so candidates know what the role is."); form.title.focus(); return; }
-    const status = form.querySelector('input[name="status"]:checked').value;
-    const data = {
-      title, status,
-      category: form.category.value, type: form.type.value,
-      location: form.location.value.trim() || "Remote, Philippines",
-      shift: form.shift.value.trim() || "Flexible hours",
-      summary: form.summary.value.trim(),
-      responsibilities: lines(form.responsibilities.value),
-      requirements: lines(form.requirements.value),
-    };
-    let msg;
-    if (editing) {
-      if (status === "open" && editing.status !== "open") data.posted = today();
-      msg = status === "open" && editing.status !== "open" ? "Job published" : "Changes saved";
-      Object.assign(editing, data, { _new: true });
-    } else {
-      let id = slug(title);
-      while (jobs.some((j) => j.id === id)) id = `${slug(title)}-${Math.random().toString(36).slice(2, 5)}`;
-      jobs.unshift({ id, applicants: 0, posted: today(), ...data, _new: true });
-      msg = status === "open" ? "Job published" : status === "draft" ? "Draft saved" : "Job saved";
-    }
-    saveJobs();
-    drawer.close();
-    jobFilter = "all"; renderJobs();
-    toast(msg);
-  });
-
-  $("#delete-job").addEventListener("click", () => { const j = editing; drawer.close(); if (j) deleteJob(j); });
-  $("#new-job").addEventListener("click", () => openJob(null));
+  /* ---------- Job form lives on its own page ---------- */
+  const openJob = (j) => { location.href = j ? `admin-job.html?id=${encodeURIComponent(j.id)}` : "admin-job.html"; };
 
   /* ==========================================================================
      Team and roles
@@ -523,7 +452,7 @@
   });
 
   /* ---------- Dialog closing ---------- */
-  [drawer, modal].forEach((d) => {
+  [modal].forEach((d) => {
     d.addEventListener("click", (e) => {
       if (e.target === d || e.target.closest("[data-close]")) d.close();
     });
@@ -533,4 +462,10 @@
   const renderAll = () => { renderMe(); renderJobs(); renderMatrix(); renderTeam(); };
   renderAll();
   route();
+
+  // Confirmation passed from the job form page
+  try {
+    const msg = sessionStorage.getItem("gss-admin-flash");
+    if (msg) { sessionStorage.removeItem("gss-admin-flash"); toast(msg); }
+  } catch (e) { /* ignore */ }
 })();

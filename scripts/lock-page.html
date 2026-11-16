@@ -119,16 +119,69 @@
     return new TextDecoder().decode(plain);
   }
 
-  // Swap in the page only once this lock page has finished parsing. Calling
-  // document.open() while the parser is still running appends the page to this
-  // one instead of replacing it, so both pages' elements and styles mix.
+  // Swap the decrypted page in place of this lock page.
+  //
+  // This used to be document.open() + document.write(), but browsers handle
+  // written documents unreliably on Back and Forward: the markup comes back
+  // and its scripts don't run again, leaving the page half drawn. Instead we
+  // parse the page, replace this document's <html>, wait for its stylesheets,
+  // then run its scripts one at a time, in order, like a normal page load.
   async function render(html) {
     if (document.readyState === 'loading') {
       await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
     }
-    document.open();
-    document.write(html);
-    document.close();
+
+    const parsed = new DOMParser().parseFromString(html, 'text/html');
+    // Scripts from DOMParser never run, so set them aside and recreate them below
+    const scripts = [...parsed.querySelectorAll('script')].map(old => {
+      const marker = parsed.createComment('script');
+      old.replaceWith(marker);
+      return { marker, old };
+    });
+
+    const root = document.importNode(parsed.documentElement, true);
+    root.style.visibility = 'hidden';
+    document.replaceChild(root, document.documentElement);
+
+    // Show the page once its styles are in, so it doesn't flash unstyled
+    const sheets = [...document.querySelectorAll('link[rel="stylesheet"]')].map(link =>
+      link.sheet ? null : new Promise(resolve => {
+        link.addEventListener('load', resolve, { once: true });
+        link.addEventListener('error', resolve, { once: true });
+      })
+    ).filter(Boolean);
+    await Promise.race([Promise.all(sheets), new Promise(resolve => setTimeout(resolve, 3000))]);
+    root.style.visibility = '';
+
+    // The browser tried to jump to #section before the page existed. Without a
+    // #section, start at the top rather than wherever the lock page was left.
+    let target = null;
+    if (location.hash.length > 1) {
+      try { target = document.getElementById(decodeURIComponent(location.hash.slice(1))); } catch {}
+    }
+    if (target) target.scrollIntoView();
+    else window.scrollTo(0, 0);
+
+    // Find each placeholder in the live document and run its script in order
+    const walker = document.createTreeWalker(document, NodeFilter.SHOW_COMMENT);
+    const markers = [];
+    while (walker.nextNode()) if (walker.currentNode.data === 'script') markers.push(walker.currentNode);
+
+    for (let i = 0; i < scripts.length && i < markers.length; i++) {
+      const { old } = scripts[i];
+      const script = document.createElement('script');
+      for (const { name, value } of old.attributes) script.setAttribute(name, value);
+      if (old.hasAttribute('src')) {
+        await new Promise(resolve => {
+          script.addEventListener('load', resolve, { once: true });
+          script.addEventListener('error', resolve, { once: true });
+          markers[i].replaceWith(script);
+        });
+      } else {
+        script.textContent = old.textContent;
+        markers[i].replaceWith(script);
+      }
+    }
   }
 
   form.addEventListener('submit', async event => {
