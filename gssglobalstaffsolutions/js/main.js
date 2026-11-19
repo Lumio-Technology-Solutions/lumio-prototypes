@@ -4,11 +4,34 @@
   const BUSINESS_END = 18;
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  /* ---------- Refresh always starts at the top ----------
+     Browsers restore the old scroll position, or jump to a #section left in the
+     address bar. On a reload, drop both. Links from other pages still jump. */
+  const nav0 = performance.getEntriesByType && performance.getEntriesByType("navigation")[0];
+  if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+  if (nav0 && nav0.type === "reload") {
+    if (location.hash) history.replaceState(null, "", location.pathname + location.search);
+    const toTop = () => window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    toTop();
+    window.addEventListener("load", toTop, { once: true });
+  }
+
   /* ---------- Nav ---------- */
   const nav = document.querySelector(".nav");
   const toggle = document.querySelector(".nav__toggle");
   const menu = document.getElementById("mobile-menu");
-  const onScroll = () => nav.classList.toggle("is-scrolled", window.scrollY > 8);
+  // On the home page the nav sits over the navy hero until you scroll past it, or open the menu
+  // and any other full-screen dark section marked data-nav-dark
+  const darkEls = nav.classList.contains("nav--over") ? [...document.querySelectorAll("[data-nav-dark]")] : [];
+  const onScroll = () => {
+    nav.classList.toggle("is-scrolled", window.scrollY > 8);
+    if (darkEls.length) {
+      const menuOpen = toggle.getAttribute("aria-expanded") === "true";
+      const mid = nav.offsetHeight / 2;
+      const overDark = darkEls.some((el) => { const r = el.getBoundingClientRect(); return r.top <= mid && r.bottom > mid; });
+      nav.classList.toggle("is-over", !menuOpen && overDark);
+    }
+  };
   window.addEventListener("scroll", onScroll, { passive: true });
   onScroll();
 
@@ -17,12 +40,14 @@
     toggle.setAttribute("aria-expanded", String(!open));
     toggle.setAttribute("aria-label", open ? "Open menu" : "Close menu");
     menu.hidden = open;
+    onScroll();
   });
   menu.addEventListener("click", (e) => {
     if (e.target.closest("a")) {
       menu.hidden = true;
       toggle.setAttribute("aria-expanded", "false");
       toggle.setAttribute("aria-label", "Open menu");
+      onScroll();
     }
   });
 
@@ -105,6 +130,11 @@
     const get = (t) => (teamParts.find((p) => p.type === t) || {}).value;
     document.getElementById("manila-time").textContent = `${get("hour")}:${get("minute")}`;
     document.getElementById("manila-ampm").textContent = get("dayPeriod") || "";
+    const ctaClock = document.getElementById("cta-clock");
+    if (ctaClock) {
+      ctaClock.textContent = `${get("hour")}:${get("minute")}`;
+      document.getElementById("cta-now").textContent = `${get("hour")}:${get("minute")} ${get("dayPeriod") || ""}`.trim();
+    }
 
     const teamHour = (now.getUTCHours() + now.getUTCMinutes() / 60 + tzOffsetHours(TEAM_TZ, now) + 24) % 24;
     const [x, y] = polar(teamHour, R_ARC);

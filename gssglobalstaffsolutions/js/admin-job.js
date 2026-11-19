@@ -165,6 +165,7 @@
   const htmlBox = $("#f-desc-html");
   const toolbar = document.querySelector(".editor__bar");
   const formatSel = $("#ed-format");
+  const sizeSel = $("#ed-size");
   let htmlMode = false;
   const exec = (cmd, val = null) => { try { return document.execCommand(cmd, false, val); } catch (e) { return false; } };
   const inEditor = () => { const n = document.getSelection().anchorNode; return n && editor.contains(n); };
@@ -196,6 +197,47 @@
     const tag = quote ? "BLOCKQUOTE" : block ? block.tagName : "P";
     formatSel.value = { H3: "h3", H4: "h4", BLOCKQUOTE: "blockquote" }[tag] || "p";
     $("#ed-path").textContent = BLOCK_NAMES[tag] || "Paragraph";
+    let at = document.getSelection().anchorNode;
+    if (at && at.nodeType === 3) at = at.parentElement;
+    if (at) {
+      const px = String(Math.round(parseFloat(getComputedStyle(at).fontSize)));
+      sizeSel.value = [...sizeSel.options].some((o) => o.value === px) ? px : "16";
+    }
+  };
+
+  /* Font size: the browser marks the selection with <font size="7">, which is
+     swapped for a span with one of a fixed set of size classes. 16 px is the
+     normal size, so it only needs a class inside text that's sized otherwise. */
+  let pendingSize = null;
+  const applySizeMarks = () => {
+    const marks = editor.querySelectorAll('font[size="7"], span[style*="xxx-large"]');
+    if (!marks.length) return;
+    // Moving the text resets the caret, so put it back afterwards
+    const sel = document.getSelection();
+    const keep = sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+    const ends = keep && [keep.startContainer, keep.startOffset, keep.endContainer, keep.endOffset];
+    marks.forEach((mark) => {
+      mark.querySelectorAll('span[class^="fs-"]').forEach((inner) => inner.replaceWith(...inner.childNodes));
+      const size = pendingSize || "16";
+      if (size === "16" && !mark.parentElement.closest('span[class^="fs-"]')) { mark.replaceWith(...mark.childNodes); return; }
+      const span = document.createElement("span");
+      span.className = `fs-${size}`;
+      span.append(...mark.childNodes);
+      mark.replaceWith(span);
+    });
+    // A size set inside a bigger or smaller span: keep only the innermost one
+    editor.querySelectorAll('span[class^="fs-"] span[class^="fs-"]').forEach((inner) => {
+      const outer = inner.parentElement.closest('span[class^="fs-"]');
+      if (outer && outer.textContent === inner.textContent) { outer.className = inner.className; inner.replaceWith(...inner.childNodes); }
+    });
+    editor.querySelectorAll('span[class^="fs-"]').forEach((el) => { if (!el.textContent) el.remove(); });
+    if (ends && editor.contains(ends[0]) && editor.contains(ends[2])) {
+      try {
+        const r = document.createRange();
+        r.setStart(ends[0], ends[1]); r.setEnd(ends[2], ends[3]);
+        sel.removeAllRanges(); sel.addRange(r);
+      } catch (e) { /* ignore */ }
+    }
   };
 
   const countWords = () => {
@@ -232,6 +274,16 @@
     } else {
       exec(cmd);
     }
+    changed(); syncToolbar();
+  });
+
+  sizeSel.addEventListener("change", () => {
+    editor.focus();
+    pendingSize = sizeSel.value;
+    exec("styleWithCSS", false);
+    exec("fontSize", "7");
+    // With nothing selected, the size applies to what's typed next
+    if (!document.getSelection().isCollapsed) applySizeMarks();
     changed(); syncToolbar();
   });
 
@@ -274,7 +326,7 @@
     changed();
   });
 
-  editor.addEventListener("input", changed);
+  editor.addEventListener("input", () => { applySizeMarks(); changed(); });
   editor.addEventListener("keyup", syncToolbar);
   editor.addEventListener("mouseup", syncToolbar);
   editor.addEventListener("focus", syncToolbar);

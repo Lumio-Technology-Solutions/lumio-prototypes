@@ -193,6 +193,7 @@
     UL: "ul", OL: "ol", LI: "li", BLOCKQUOTE: "blockquote", A: "a",
     H1: "h3", H2: "h3", H3: "h3", H4: "h4", H5: "h4", H6: "h4",
   };
+  const FONT_SIZES = new Set(["12", "14", "16", "18", "20", "22", "24", "28", "32"]);
   const ALIGNABLE = new Set(["p", "h3", "h4", "li", "blockquote"]);
   const safeHref = (href) => {
     const h = String(href || "").trim();
@@ -206,6 +207,17 @@
       node.childNodes.forEach((child) => {
         if (child.nodeType === 3) { out.appendChild(document.createTextNode(child.textContent)); return; }
         if (child.nodeType !== 1) return;
+        // Font sizes from the editor's size picker are kept as a fixed set of classes
+        if (child.tagName === "SPAN") {
+          const size = (String(child.className).match(/\bfs-(\d+)\b/) || [])[1];
+          if (FONT_SIZES.has(size)) {
+            const span = document.createElement("span");
+            span.className = `fs-${size}`;
+            span.appendChild(clean(child));
+            out.appendChild(span);
+          } else out.appendChild(clean(child));
+          return;
+        }
         const tag = ALLOWED[child.tagName];
         if (!tag) { out.appendChild(clean(child)); return; }
         if (tag === "a" && !safeHref(child.getAttribute("href"))) { out.appendChild(clean(child)); return; }
